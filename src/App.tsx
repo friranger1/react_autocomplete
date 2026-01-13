@@ -1,44 +1,45 @@
-import React from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import './App.scss';
 import { peopleFromServer } from './data/people';
 import { Person } from './types/Person';
 import debounce from 'lodash.debounce';
 
 export const App: React.FC = () => {
-  const [query, setQuery] = React.useState('');
-  const [appliedQuery, setAppliedQuery] = React.useState('');
-  const [selected, setSelected] = React.useState<Person | null>(null);
+  const [query, setQuery] = useState('');
+  const [appliedQuery, setAppliedQuery] = useState('');
+  const [selected, setSelected] = useState<Person | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const applyQuery = React.useCallback(
+  const applyQuery = useCallback(
     debounce((nextValue: string) => {
       setQuery(nextValue);
     }, 300),
-    []
+    [],
   );
+
+  const handleQueryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setAppliedQuery(value);
+    applyQuery(value);
+
+    setIsDropdownOpen(true);
+    if (selected) setSelected(null);
+  };
 
   const handleSelectPerson = (person: Person) => {
     setSelected(person);
     setAppliedQuery(person.name);
     setQuery(person.name);
+    setIsDropdownOpen(false);
   };
 
-  const handleQueryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-
-    setAppliedQuery(value);
-
-    applyQuery(value);
-
-    if (selected) {
-      setSelected(null);
+  const filteredPeopleList = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return peopleFromServer;
     }
-  };
-
-  const filteredPeopleList = React.useMemo(() => {
-    if (!query.trim()) return peopleFromServer;
-
     return peopleFromServer.filter(human =>
-      human.name.toLowerCase().includes(query.toLowerCase())
+      human.name.toLowerCase().includes(normalizedQuery),
     );
   }, [query]);
 
@@ -51,28 +52,40 @@ export const App: React.FC = () => {
             : 'No selected person'}
         </h1>
 
-        <div className="dropdown is-active">
-          <input
-            type="text"
-            className="input"
-            value={appliedQuery}
-            onChange={handleQueryChange}
-            placeholder="Enter a part of the name"
-            data-cy="search-input"
-          />
+        <div className={`dropdown ${isDropdownOpen ? 'is-active' : ''}`}>
+          <div className="dropdown-trigger">
+            <input
+              type="text"
+              className="input"
+              value={appliedQuery}
+              onChange={handleQueryChange}
+              onFocus={() => setIsDropdownOpen(true)}
+              placeholder="Enter a part of the name"
+              data-cy="search-input"
+            />
+          </div>
 
-          {appliedQuery && filteredPeopleList.length > 0 && (
-            <div className="dropdown-menu">
+          {isDropdownOpen && (
+            <div className="dropdown-menu" id="dropdown-menu" role="menu">
               <div className="dropdown-content">
-                {filteredPeopleList.map(person => (
-                  <a
-                    key={person.name}
-                    className="dropdown-item"
-                    onClick={() => handleSelectPerson(person)}
-                  >
-                    {person.name}
-                  </a>
-                ))}
+                {filteredPeopleList.length > 0 ? (
+                  filteredPeopleList.map(person => (
+                    <a
+                      key={person.name}
+                      className="dropdown-item"
+                      data-cy="suggestion-item"
+                      onClick={() => handleSelectPerson(person)}
+                    >
+                      {person.name}
+                    </a>
+                  ))
+                ) : (
+                  <div className="dropdown-item">
+                    <p className="has-text-danger" data-cy="no-suggestions-message">
+                      No matching suggestions
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
